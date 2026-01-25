@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/timer"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
@@ -76,7 +77,8 @@ func teaHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
 		Name:    "",
 		Session: sess,
 		ID:      uuid.New(),
-		MatchC:  make(chan uuid.UUID, 1),
+		MatchC:  make(chan player.MatchInfo, 1),
+		ReadyC:  make(chan uuid.UUID),
 	}
 
 	initialModel := model{
@@ -103,6 +105,8 @@ type model struct {
 	player     player.Player
 	matchmaker *queue.Matchmaker
 	gameID     uuid.UUID
+	gameStart  time.Time
+	timer      timer.Model
 	// term      string
 	// profile   string
 	width  int
@@ -124,10 +128,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.width = msg.Width
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "enter":
-			switch m.state {
-			case nameInput:
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+		switch m.state {
+		case nameInput:
+			switch msg.String() {
+			case "enter":
 				if m.textInput.Value() == "" {
 					m.errMsg = "Name cannot be empty."
 					return m, nil
@@ -142,15 +149,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					},
 				)
 			}
-		case "ctrl+c":
-			return m, tea.Quit
+		case matched:
+			switch msg.String() {
+			case "enter", "Y", "y":
+				// send id to read channel
+			case "N", "n":
+				// leave queue and return to name input
+			}
 		}
-	case queue.MatchFound:
+	case player.MatchInfo:
 		m.state = matched
-		m.gameID = msg.GameID
-		return m, tea.Tick(2*time.Second, func(time.Time) tea.Msg {
-			return startGameMsg{}
-		})
+		m.gameID = msg.ID
+		m.gameStart = msg.StartTime
+
+		var cmd tea.Cmd
+		m.timer, cmd = m.timer.Update(msg)
+
+		return m, cmd
 	}
 
 	if m.state == nameInput {
@@ -167,7 +182,8 @@ func (m model) View() string {
 	case waitingInQueue:
 		s = fmt.Sprintf("Hello, %s!\n\nFinding an opponent...\n", m.player.Name)
 	case matched:
-		s = "Matched!\n\nGame starting soon...\n"
+		s = "Match found! Would you like to accept? (Y/n)\n\n"
+		s += fmt.Sprintf("Time remaining: %s", m.timer.View())
 	}
 	return m.txtStyle.Render(s) + "\n\n" + m.quitStyle.Render("Press 'ctrl+c' to quit\n")
 }
