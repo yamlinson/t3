@@ -21,6 +21,7 @@ import (
 	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
 	"github.com/google/uuid"
+	"github.com/yamlinson/t3/internal/player"
 	"github.com/yamlinson/t3/internal/queue"
 )
 
@@ -64,43 +65,18 @@ func main() {
 
 var mm *queue.Matchmaker = queue.NewMatchmaker()
 
-// You can wire any Bubble Tea model up to the middleware with a function that
-// handles the incoming ssh.Session. Here we just grab the terminal info and
-// pass it to the new model. You can also return tea.ProgramOptions (such as
-// tea.WithAltScreen) on a session by session basis.
 func teaHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
-	// This should never fail, as we are using the activeterm middleware.
-	// pty, _, _ := s.Pty()
-
-	// When running a Bubble Tea app over SSH, you shouldn't use the default
-	// lipgloss.NewStyle function.
-	// That function will use the color profile from the os.Stdin, which is the
-	// server, not the client.
-	// We provide a MakeRenderer function in the bubbletea middleware package,
-	// so you can easily get the correct renderer for the current session, and
-	// use it to create the styles.
-	// The recommended way to use these styles is to then pass them down to
-	// your Bubble Tea model.
-	// renderer := bubbletea.MakeRenderer(s)
-	// txtStyle := renderer.NewStyle().Foreground(lipgloss.Color("10"))
-	// quitStyle := renderer.NewStyle().Foreground(lipgloss.Color("8"))
-
-	// bg := "light"
-	// if renderer.HasDarkBackground() {
-	// 	bg = "dark"
-	// }
-
 	ti := textinput.New()
 	ti.Placeholder = "Your name"
 	ti.CharLimit = 20
 	ti.Width = 30
 	ti.Focus()
 
-	p := queue.Player{
+	p := player.Player{
 		Name:    "",
 		Session: sess,
 		ID:      uuid.New(),
-		MatchC:  make(chan queue.Match, 1),
+		MatchC:  make(chan uuid.UUID, 1),
 	}
 
 	initialModel := model{
@@ -124,9 +100,9 @@ type model struct {
 	textInput  textinput.Model
 	errMsg     string
 	state      uiState
-	player     queue.Player
+	player     player.Player
 	matchmaker *queue.Matchmaker
-	opponent   queue.Player
+	gameID     uuid.UUID
 	// term      string
 	// profile   string
 	width  int
@@ -159,7 +135,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.player.Name = m.textInput.Value()
 				m.state = waitingInQueue
 				return m, tea.Batch(
-					waitForMatch(&m.player),
+					queue.WaitForMatch(&m.player),
 					func() tea.Msg {
 						m.matchmaker.AddPlayer(m.player)
 						return playerAddedMsg{}
@@ -169,9 +145,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m, tea.Quit
 		}
-	case matchFound:
+	case queue.MatchFound:
 		m.state = matched
-		m.opponent = msg.opponent
+		m.gameID = msg.GameID
 		return m, tea.Tick(2*time.Second, func(time.Time) tea.Msg {
 			return startGameMsg{}
 		})
@@ -191,23 +167,12 @@ func (m model) View() string {
 	case waitingInQueue:
 		s = fmt.Sprintf("Hello, %s!\n\nFinding an opponent...\n", m.player.Name)
 	case matched:
-		s = fmt.Sprintf("Matched with %s!\n\nGame starting soon...\n", m.opponent.Name)
+		s = "Matched!\n\nGame starting soon...\n"
 	}
 	return m.txtStyle.Render(s) + "\n\n" + m.quitStyle.Render("Press 'ctrl+c' to quit\n")
-}
-
-type matchFound struct {
-	opponent queue.Player
 }
 
 type (
 	startGameMsg   struct{}
 	playerAddedMsg struct{}
 )
-
-func waitForMatch(p *queue.Player) tea.Cmd {
-	return func() tea.Msg {
-		m := <-p.MatchC
-		return matchFound{opponent: m.Opponent}
-	}
-}

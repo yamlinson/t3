@@ -4,38 +4,25 @@ package queue
 import (
 	"sync"
 
-	"github.com/charmbracelet/ssh"
-	"github.com/google/uuid"
+	"github.com/yamlinson/t3/internal/game"
+	"github.com/yamlinson/t3/internal/player"
 )
-
-// Player represents a player waiting in queue
-type Player struct {
-	Name    string
-	Session ssh.Session
-	ID      uuid.UUID
-	MatchC  chan Match
-}
-
-// Match represents the information sent to a player when a match is found
-type Match struct {
-	Opponent Player
-}
 
 // Matchmaker pairs players into matches
 type Matchmaker struct {
-	players []Player
+	players []player.Player
 	mu      sync.Mutex
 }
 
 // NewMatchmaker instantiates a new Matchmaker
 func NewMatchmaker() *Matchmaker {
 	return &Matchmaker{
-		players: make([]Player, 0),
+		players: make([]player.Player, 0),
 	}
 }
 
 // AddPlayer adds the given player to a Matchmaker
-func (m *Matchmaker) AddPlayer(p Player) {
+func (m *Matchmaker) AddPlayer(p player.Player) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -44,12 +31,10 @@ func (m *Matchmaker) AddPlayer(p Player) {
 	if len(m.players) >= 2 {
 		p1, p2 := m.players[0], m.players[1]
 
-		p1.MatchC <- Match{
-			Opponent: p2,
-		}
-		p2.MatchC <- Match{
-			Opponent: p1,
-		}
+		g := game.NewGame(p1, p2)
+
+		p1.MatchC <- g.ID
+		p2.MatchC <- g.ID
 
 		m.players = m.players[2:]
 	}
