@@ -2,24 +2,20 @@
 package game
 
 import (
-	"time"
-
 	"github.com/google/uuid"
 	"github.com/yamlinson/t3/internal/player"
 )
 
 // Game represents the state of one game
 type Game struct {
-	ID        uuid.UUID
-	Players   [2]player.Player
-	StartTime time.Time
+	ID      uuid.UUID
+	Players [2]player.Player
 }
 
 // NewGame creates a new game with the given pair of players
 func NewGame(p1 player.Player, p2 player.Player) *Game {
 	return &Game{
-		ID:        uuid.New(),
-		Players:   [2]player.Player{p1, p2},
-		StartTime: time.Now().Add(15 * time.Second),
+		ID:      uuid.New(),
+		Players: [2]player.Player{p1, p2},
 	}
 }

@@ -1,4 +1,4 @@
-// main is the entrypoint of t3
+// t3 is a tic-tac-toe server with a TUI client served over SSH
 package main
 
 import (
@@ -22,6 +22,7 @@ import (
 	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
 	"github.com/google/uuid"
+	"github.com/yamlinson/t3/internal/game"
 	"github.com/yamlinson/t3/internal/player"
 	"github.com/yamlinson/t3/internal/queue"
 )
@@ -32,6 +33,32 @@ const (
 )
 
 func main() {
+	mm := queue.NewMatchmaker()
+	go mm.WatchResults()
+
+	teaHandler := func(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
+		ti := textinput.New()
+		ti.Placeholder = "Your name"
+		ti.CharLimit = 20
+		ti.Width = 30
+		ti.Focus()
+
+		p := &player.Player{
+			Name:    "",
+			Session: sess,
+			ID:      uuid.New(),
+			Stream:  make(chan player.StreamEvent),
+		}
+
+		initialModel := model{
+			textInput:  ti,
+			player:     p,
+			matchmaker: mm,
+		}
+
+		return initialModel, []tea.ProgramOption{tea.WithAltScreen()}
+	}
+
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
 		wish.WithHostKeyPath(".ssh/id_ed25519"),
@@ -64,49 +91,28 @@ func main() {
 	}
 }
 
-var mm *queue.Matchmaker = queue.NewMatchmaker()
-
-func teaHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
-	ti := textinput.New()
-	ti.Placeholder = "Your name"
-	ti.CharLimit = 20
-	ti.Width = 30
-	ti.Focus()
-
-	p := player.Player{
-		Name:    "",
-		Session: sess,
-		ID:      uuid.New(),
-		MatchC:  make(chan player.MatchInfo, 1),
-		ReadyC:  make(chan uuid.UUID),
-	}
-
-	initialModel := model{
-		textInput:  ti,
-		player:     p,
-		matchmaker: mm,
-	}
-
-	return initialModel, []tea.ProgramOption{tea.WithAltScreen()}
-}
-
 type uiState int
 
 const (
 	nameInput uiState = iota
-	waitingInQueue
+	queued
 	matched
+	accepted
+	declined
+	gameReady
 )
 
 type model struct {
-	textInput  textinput.Model
-	errMsg     string
-	state      uiState
-	player     player.Player
-	matchmaker *queue.Matchmaker
-	gameID     uuid.UUID
-	gameStart  time.Time
-	timer      timer.Model
+	textInput      textinput.Model
+	errMsg         string
+	state          uiState
+	player         *player.Player
+	matchmaker     *queue.Matchmaker
+	matchID        uuid.UUID
+	acceptTimeout  time.Time
+	timer          timer.Model
+	respondToMatch chan queue.AcceptMsg
+	game           *game.Game
 	// term      string
 	// profile   string
 	width  int
@@ -140,11 +146,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				m.player.Name = m.textInput.Value()
-				m.state = waitingInQueue
+				m.state = queued
 				return m, tea.Batch(
-					queue.WaitForMatch(&m.player),
+					m.player.WaitForEvent(),
 					func() tea.Msg {
-						m.matchmaker.AddPlayer(m.player)
+						m.matchmaker.AddPlayer(*m.player)
 						return playerAddedMsg{}
 					},
 				)
@@ -152,18 +158,45 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case matched:
 			switch msg.String() {
 			case "enter", "Y", "y":
-				// send id to read channel
+				m.state = accepted
+				m.respondToMatch <- queue.AcceptMsg{
+					PlayerID: m.player.ID,
+					Accepted: true,
+				}
+				return m, m.player.WaitForEvent()
 			case "N", "n":
-				// leave queue and return to name input
+				m.state = declined
+				return m, nil
 			}
+		case declined:
+			m.state = nameInput
+			return m, nil
 		}
-	case player.MatchInfo:
-		m.state = matched
-		m.gameID = msg.ID
-		m.gameStart = msg.StartTime
-
+	case timer.TickMsg:
+		if m.state == matched && int(m.timer.Timeout.Seconds()) == 0 {
+			m.state = declined
+		}
 		var cmd tea.Cmd
 		m.timer, cmd = m.timer.Update(msg)
+		return m, cmd
+	case player.StreamEvent:
+		switch msg.Type {
+		case player.Matched:
+			m.state = matched
+			m.matchID = msg.Data["MatchID"].(uuid.UUID)
+			m.acceptTimeout = msg.Data["AcceptTimeout"].(time.Time)
+			m.respondToMatch = msg.Data["RespondTo"].(chan queue.AcceptMsg)
+
+			remaining := time.Until(m.acceptTimeout)
+			m.timer = timer.New(remaining)
+			cmd = m.timer.Init()
+		case player.Declined:
+			m.state = declined
+		case player.GameReady:
+			m.state = gameReady
+			m.game = msg.Data["game"].(*game.Game)
+			m.timer.Stop()
+		}
 
 		return m, cmd
 	}
@@ -179,16 +212,23 @@ func (m model) View() string {
 	switch m.state {
 	case nameInput:
 		s = fmt.Sprintf("Please enter your name...\n%s\n\n%s", m.textInput.View(), m.errMsg)
-	case waitingInQueue:
+	case queued:
 		s = fmt.Sprintf("Hello, %s!\n\nFinding an opponent...\n", m.player.Name)
 	case matched:
+		seconds := int(m.timer.Timeout.Seconds())
 		s = "Match found! Would you like to accept? (Y/n)\n\n"
-		s += fmt.Sprintf("Time remaining: %s", m.timer.View())
+		s += fmt.Sprintf("Time remaining: %d\n\n", seconds)
+	case accepted:
+		s = "Match accepted! Waiting for game start...\n\n"
+	case declined:
+		s = "Match declined. Press any key to return to home...\n\n"
+	case gameReady:
+		s = "Game found! Joining now...\n\n"
+		s += fmt.Sprintf("Game ID: %s\n\n", m.game.ID)
 	}
 	return m.txtStyle.Render(s) + "\n\n" + m.quitStyle.Render("Press 'ctrl+c' to quit\n")
 }
 
 type (
-	startGameMsg   struct{}
 	playerAddedMsg struct{}
 )

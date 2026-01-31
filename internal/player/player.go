@@ -2,8 +2,6 @@
 package player
 
 import (
-	"time"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/ssh"
 	"github.com/google/uuid"
@@ -14,19 +12,31 @@ type Player struct {
 	Name    string
 	Session ssh.Session
 	ID      uuid.UUID
-	MatchC  chan MatchInfo
-	ReadyC  chan uuid.UUID
+	Stream  chan StreamEvent
 }
 
-// MatchInfo contains the information a player needs when notified of a new match
-type MatchInfo struct {
-	ID        uuid.UUID
-	StartTime time.Time
+// StreamEvent contains the information a player needs when notified of an event on their stream
+type StreamEvent struct {
+	Type EventType
+	Data map[string]any
 }
 
-// WaitForMatch places a player into the matchmaking queue
-func (p *Player) WaitForMatch() tea.Cmd {
+// EventType defines the Types which can be associated with an Event
+type EventType int
+
+// Queued, Matched, Accepted, Declined, and GameReady
+// describe possible events a player might be notified of
+const (
+	Queued EventType = iota
+	Matched
+	Accepted
+	Declined
+	GameReady
+)
+
+// WaitForEvent listens for an event on the player's stream
+func (p *Player) WaitForEvent() tea.Cmd {
 	return func() tea.Msg {
-		return <-p.MatchC
+		return <-p.Stream
 	}
 }
