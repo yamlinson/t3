@@ -43,9 +43,7 @@ func (mm *Matchmaker) AddPlayer(p player.Player) {
 	evt := player.StreamEvent{
 		Type: player.Matched,
 		Data: map[string]any{
-			"MatchID":       match.ID,
-			"AcceptTimeout": match.AcceptTimeout,
-			"RespondTo":     (chan AcceptMsg)(match.Responses),
+			"Match": match,
 		},
 	}
 
