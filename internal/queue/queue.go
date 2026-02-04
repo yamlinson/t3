@@ -25,7 +25,7 @@ type Model struct {
 }
 
 // GetModel returns a Model for a queue screen
-func GetModel(p *player.Player, mm *Matchmaker) Model {
+func GetModel(p *player.Player, mm *Matchmaker, g *game.Game) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Your name"
 	ti.CharLimit = 20
@@ -36,6 +36,7 @@ func GetModel(p *player.Player, mm *Matchmaker) Model {
 		textInput:  ti,
 		player:     p,
 		matchmaker: mm,
+		game:       g,
 	}
 }
 
@@ -129,6 +130,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case player.GameReady:
 			m.state = gameReady
 			m.game = msg.Data["game"].(*game.Game)
+			cmd = func() tea.Msg { return game.SwitchToGameModel{} }
 			m.timer.Stop()
 		}
 	}

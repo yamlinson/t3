@@ -91,7 +91,7 @@ type mainModel struct {
 
 func initMainModel(p *player.Player, mm *queue.Matchmaker) mainModel {
 	return mainModel{
-		activeModel: queue.GetModel(p, mm),
+		activeModel: queue.GetModel(p, mm, &game.Game{}),
 		player:      p,
 		matchmaker:  mm,
 	}
@@ -116,6 +116,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
+	case game.SwitchToGameModel:
+		m.activeModel = game.GetModel(m.game)
+		return m, m.activeModel.Init()
 	}
 	m.activeModel, cmd = m.activeModel.Update(msg)
 	return m, cmd
