@@ -29,7 +29,10 @@ type Model struct {
 
 // GetModel returns a model for a game screen
 func GetModel(g *Game) tea.Model {
-	return Model{game: g}
+	return Model{
+		game: g,
+		turn: 'X',
+	}
 }
 
 // Init sets the initial state of a game screen
@@ -41,6 +44,8 @@ func (m Model) Init() tea.Cmd {
 func (m Model) View() string {
 	var s string
 	cells := make([]string, 9)
+
+	s += "Current turn: " + string(m.turn) + "\n\n"
 
 	for i := range 9 {
 		style := cellStyle
@@ -56,8 +61,8 @@ func (m Model) View() string {
 			style = playedOStyle
 			content = "O"
 		}
-		if i == m.cursor && m.board[i] == 0 {
-			content = "•"
+		if i == m.cursor {
+			style = selectedStyle
 		}
 		cells[i] = style.Render(content)
 	}
@@ -70,17 +75,11 @@ func (m Model) View() string {
 	}
 
 	s += "\n\nControls:\n"
-	s += "q to quit\n"
+	s += "q to quit game\n"
 	s += "hjkl or arrow keys to move\n"
 	s += "space to choose square\n"
 
-	return lipgloss.Place(
-		lipgloss.Width(s),
-		lipgloss.Height(s)+4,
-		lipgloss.Center,
-		lipgloss.Center,
-		s,
-	)
+	return s
 }
 
 // Update handles changes to a game screen
@@ -89,6 +88,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q":
+			// TODO: Return to home
 			return m, tea.Quit
 		case "h", "left":
 			if m.cursor%3 > 0 {
@@ -106,7 +106,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor%3 < 2 {
 				m.cursor++
 			}
-		case "space":
+		case " ":
 			if m.board[m.cursor] == 0 {
 				m.board[m.cursor] = m.turn
 				if m.turn == 'X' {

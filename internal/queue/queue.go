@@ -50,7 +50,7 @@ func (m Model) View() string {
 	var s string
 	switch m.state {
 	case nameInput:
-		s = fmt.Sprintf("Please enter your name...\n%s\n\n%s", m.textInput.View(), m.errMsg)
+		s = fmt.Sprintf("Please enter your name...\n\n%s\n\n%s", m.textInput.View(), m.errMsg)
 	case queued:
 		s = fmt.Sprintf("Hello, %s!\n\nFinding an opponent...\n", m.player.Name)
 	case matched:

@@ -103,7 +103,14 @@ func (m mainModel) Init() tea.Cmd {
 
 func (m mainModel) View() string {
 	s := m.activeModel.View()
-	return m.txtStyle.Render(s) + "\n\n" + m.quitStyle.Render("Press 'ctrl+c' to quit\n")
+	s = m.txtStyle.Render(s) + "\n\n" + m.quitStyle.Render("Press 'ctrl+c' to exit\n")
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		s,
+	)
 }
 
 func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
