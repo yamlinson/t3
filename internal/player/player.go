@@ -21,7 +21,7 @@ type StreamEvent struct {
 	Data map[string]any
 }
 
-// EventType defines the Types which can be associated with an Event
+// EventType defines the Types which can be associated with a StreamEvent
 type EventType int
 
 // Queued, Matched, Accepted, Declined, and GameReady
@@ -32,6 +32,7 @@ const (
 	Accepted
 	Declined
 	GameReady
+	BoardUpdate
 )
 
 // WaitForEvent listens for an event on the player's stream

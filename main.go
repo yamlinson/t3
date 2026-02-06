@@ -89,9 +89,9 @@ type mainModel struct {
 	quitStyle   lipgloss.Style
 }
 
-func initMainModel(p *player.Player, mm *queue.Matchmaker) mainModel {
-	return mainModel{
-		activeModel: queue.GetModel(p, mm, &game.Game{}),
+func initMainModel(p *player.Player, mm *queue.Matchmaker) *mainModel {
+	return &mainModel{
+		activeModel: queue.GetModel(p, mm),
 		player:      p,
 		matchmaker:  mm,
 	}
@@ -121,12 +121,13 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
-			return m, tea.Quit
+			return &m, tea.Quit
 		}
 	case game.SwitchToGameModel:
-		m.activeModel = game.GetModel(m.game)
-		return m, m.activeModel.Init()
+		g := msg.Game
+		m.activeModel = game.GetModel(g, m.player)
+		return &m, m.activeModel.Init()
 	}
 	m.activeModel, cmd = m.activeModel.Update(msg)
-	return m, cmd
+	return &m, cmd
 }

@@ -25,18 +25,17 @@ type Model struct {
 }
 
 // GetModel returns a Model for a queue screen
-func GetModel(p *player.Player, mm *Matchmaker, g *game.Game) Model {
+func GetModel(p *player.Player, mm *Matchmaker) *Model {
 	ti := textinput.New()
 	ti.Placeholder = "Your name"
 	ti.CharLimit = 20
 	ti.Width = 30
 	ti.Focus()
 
-	return Model{
+	return &Model{
 		textInput:  ti,
 		player:     p,
 		matchmaker: mm,
-		game:       g,
 	}
 }
 
@@ -80,14 +79,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				if m.textInput.Value() == "" {
 					m.errMsg = "Name cannot be empty."
-					return m, nil
+					return &m, nil
 				}
 				m.player.Name = m.textInput.Value()
 				m.state = queued
 				cmd = tea.Batch(
 					m.player.WaitForEvent(),
 					func() tea.Msg {
-						m.matchmaker.AddPlayer(*m.player)
+						m.matchmaker.AddPlayer(m.player)
 						return playerAdded{}
 					},
 				)
@@ -100,14 +99,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					PlayerID: m.player.ID,
 					Accepted: true,
 				}
-				return m, m.player.WaitForEvent()
+				return &m, m.player.WaitForEvent()
 			case "N", "n":
 				m.state = declined
-				return m, nil
+				return &m, nil
 			}
 		case declined:
 			m.state = nameInput
-			return m, nil
+			return &m, nil
 		}
 	case timer.TickMsg:
 		if m.state == matched && int(m.timer.Timeout.Seconds()) == 0 {
@@ -115,12 +114,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		var cmd tea.Cmd
 		m.timer, cmd = m.timer.Update(msg)
-		return m, cmd
+		return &m, cmd
 	case player.StreamEvent:
 		switch msg.Type {
 		case player.Matched:
 			m.state = matched
-			m.match = msg.Data["Match"].(*Match)
+			m.match = msg.Data["match"].(*Match)
 
 			remaining := time.Until(m.match.AcceptTimeout)
 			m.timer = timer.New(remaining)
@@ -130,7 +129,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case player.GameReady:
 			m.state = gameReady
 			m.game = msg.Data["game"].(*game.Game)
-			cmd = func() tea.Msg { return game.SwitchToGameModel{} }
+			cmd = func() tea.Msg { return game.SwitchToGameModel{Game: m.game} }
 			m.timer.Stop()
 		}
 	}
@@ -138,7 +137,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.state == nameInput {
 		m.textInput, cmd = m.textInput.Update(msg)
 	}
-	return m, cmd
+	return &m, cmd
 }
 
 type uiState int

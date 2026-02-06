@@ -4,6 +4,7 @@ package game
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/yamlinson/t3/internal/player"
 )
 
 var (
@@ -20,24 +21,22 @@ var (
 
 // Model describes a game screen
 type Model struct {
-	game     *Game
-	board    [9]rune
-	cursor   int
-	turn     rune
-	selected bool
+	player *player.Player
+	game   *Game
+	cursor int
 }
 
 // GetModel returns a model for a game screen
-func GetModel(g *Game) tea.Model {
-	return Model{
-		game: g,
-		turn: 'X',
+func GetModel(g *Game, p *player.Player) *Model {
+	return &Model{
+		game:   g,
+		player: p,
 	}
 }
 
 // Init sets the initial state of a game screen
 func (m Model) Init() tea.Cmd {
-	return nil
+	return m.player.WaitForEvent()
 }
 
 // View returns the visual state of a queue screen
@@ -45,15 +44,12 @@ func (m Model) View() string {
 	var s string
 	cells := make([]string, 9)
 
-	s += "Current turn: " + string(m.turn) + "\n\n"
+	s += "Current turn: " + string(m.game.Next.Name) + "\n\n"
 
 	for i := range 9 {
 		style := cellStyle
-		if m.selected && i == m.cursor {
-			style = selectedStyle
-		}
 		content := " "
-		switch m.board[i] {
+		switch m.game.Board[i] {
 		case 'X':
 			style = playedXStyle
 			content = "X"
@@ -84,12 +80,13 @@ func (m Model) View() string {
 
 // Update handles changes to a game screen
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q":
 			// TODO: Return to home
-			return m, tea.Quit
+			return &m, tea.Quit
 		case "h", "left":
 			if m.cursor%3 > 0 {
 				m.cursor--
@@ -107,18 +104,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 			}
 		case " ":
-			if m.board[m.cursor] == 0 {
-				m.board[m.cursor] = m.turn
-				if m.turn == 'X' {
-					m.turn = 'O'
-				} else {
-					m.turn = 'X'
+			if m.game.Board[m.cursor] == 0 && m.game.Next == m.player {
+				evt := StreamEvent{
+					Type: PlayerTurn,
+					Data: map[string]any{
+						"player": m.player,
+						"tile":   m.cursor,
+					},
 				}
+				go func() {
+					m.game.Stream <- evt
+				}()
 			}
 		}
+	case player.StreamEvent:
+		switch msg.Type {
+		case player.BoardUpdate:
+		}
+		cmd = m.player.WaitForEvent()
 	}
-	return m, nil
+	return &m, cmd
 }
 
 // SwitchToGameModel instructs Bubble Tea to display a game
-type SwitchToGameModel struct{}
+type SwitchToGameModel struct {
+	Game *Game
+}
