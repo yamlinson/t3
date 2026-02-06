@@ -4,6 +4,7 @@ package game
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/yamlinson/t3/internal/event"
 	"github.com/yamlinson/t3/internal/player"
 )
 
@@ -24,6 +25,7 @@ type Model struct {
 	player *player.Player
 	game   *Game
 	cursor int
+	state  gameState
 }
 
 // GetModel returns a model for a game screen
@@ -44,7 +46,12 @@ func (m Model) View() string {
 	var s string
 	cells := make([]string, 9)
 
-	s += "Current turn: " + string(m.game.Next.Name) + "\n\n"
+	switch m.state {
+	case gameInProgress:
+		s += "Current turn: " + string(m.game.Next.Name) + "\n\n"
+	case gameOver:
+		s += "Game over! " + string(m.game.Winner.Name) + " won!\n\n"
+	}
 
 	for i := range 9 {
 		style := cellStyle
@@ -72,8 +79,10 @@ func (m Model) View() string {
 
 	s += "\n\nControls:\n"
 	s += "q to quit game\n"
-	s += "hjkl or arrow keys to move\n"
-	s += "space to choose square\n"
+	if m.state == gameInProgress {
+		s += "hjkl or arrow keys to move\n"
+		s += "space to choose square\n"
+	}
 
 	return s
 }
@@ -81,40 +90,56 @@ func (m Model) View() string {
 // Update handles changes to a game screen
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+	if m.game.Winner != nil {
+		m.state = gameOver
+	}
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q":
-			// TODO: Return to home
-			return &m, tea.Quit
-		case "h", "left":
-			if m.cursor%3 > 0 {
-				m.cursor--
+		switch m.state {
+		case gameOver:
+			if msg.String() == "q" {
+				cmd = func() tea.Msg { return event.SwitchToMainModel{} }
 			}
-		case "j", "down":
-			if m.cursor < 6 {
-				m.cursor += 3
-			}
-		case "k", "up":
-			if m.cursor > 2 {
-				m.cursor -= 3
-			}
-		case "l", "right":
-			if m.cursor%3 < 2 {
-				m.cursor++
-			}
-		case " ":
-			if m.game.Board[m.cursor] == 0 && m.game.Next == m.player {
-				evt := StreamEvent{
-					Type: PlayerTurn,
-					Data: map[string]any{
-						"player": m.player,
-						"tile":   m.cursor,
-					},
+		case gameInProgress:
+			switch msg.String() {
+			case "q":
+				e := StreamEvent{
+					Type: PlayerQuit,
+					Data: map[string]any{"player": m.player},
 				}
 				go func() {
-					m.game.Stream <- evt
+					m.game.Stream <- e
 				}()
+				cmd = func() tea.Msg { return event.SwitchToMainModel{} }
+			case "h", "left":
+				if m.cursor%3 > 0 {
+					m.cursor--
+				}
+			case "j", "down":
+				if m.cursor < 6 {
+					m.cursor += 3
+				}
+			case "k", "up":
+				if m.cursor > 2 {
+					m.cursor -= 3
+				}
+			case "l", "right":
+				if m.cursor%3 < 2 {
+					m.cursor++
+				}
+			case " ":
+				if m.game.Board[m.cursor] == 0 && m.game.Next == m.player {
+					evt := StreamEvent{
+						Type: PlayerTurn,
+						Data: map[string]any{
+							"player": m.player,
+							"tile":   m.cursor,
+						},
+					}
+					go func() {
+						m.game.Stream <- evt
+					}()
+				}
 			}
 		}
 	case player.StreamEvent:
@@ -125,6 +150,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	return &m, cmd
 }
+
+type gameState int
+
+const (
+	gameInProgress gameState = iota
+	gameOver
+)
 
 // SwitchToGameModel instructs Bubble Tea to display a game
 type SwitchToGameModel struct {

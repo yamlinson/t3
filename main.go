@@ -19,6 +19,7 @@ import (
 	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
 	"github.com/google/uuid"
+	"github.com/yamlinson/t3/internal/event"
 	"github.com/yamlinson/t3/internal/game"
 	"github.com/yamlinson/t3/internal/player"
 	"github.com/yamlinson/t3/internal/queue"
@@ -126,6 +127,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case game.SwitchToGameModel:
 		g := msg.Game
 		m.activeModel = game.GetModel(g, m.player)
+		return &m, m.activeModel.Init()
+	case event.SwitchToMainModel:
+		m.activeModel = initMainModel(m.player, m.matchmaker)
 		return &m, m.activeModel.Init()
 	}
 	m.activeModel, cmd = m.activeModel.Update(msg)

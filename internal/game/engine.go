@@ -19,6 +19,7 @@ type Game struct {
 	Turns   map[*player.Player]rune
 	Next    *player.Player
 	Stream  chan StreamEvent
+	Winner  *player.Player
 }
 
 // StreamEvent contains the information sent to a game over its lifecycle
@@ -73,6 +74,14 @@ func (g *Game) WatchStream() {
 				g.Next = g.Players[1]
 			} else {
 				g.Next = g.Players[0]
+			}
+			g.sendBoardUpdate(nil)
+		case PlayerQuit:
+			p := evt.Data["player"].(*player.Player)
+			if p == g.Players[0] {
+				g.Winner = g.Players[1]
+			} else {
+				g.Winner = g.Players[0]
 			}
 			g.sendBoardUpdate(nil)
 		}
