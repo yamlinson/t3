@@ -70,6 +70,11 @@ func (g *Game) WatchStream() {
 				continue
 			}
 			g.Board[t] = g.Turns[p]
+			g.checkWin()
+			if g.Winner != nil {
+				g.sendBoardUpdate(nil)
+				continue
+			}
 			if p == g.Players[0] {
 				g.Next = g.Players[1]
 			} else {
@@ -84,6 +89,46 @@ func (g *Game) WatchStream() {
 				g.Winner = g.Players[0]
 			}
 			g.sendBoardUpdate(nil)
+		}
+	}
+}
+
+func (g *Game) checkWin() {
+	if g.Winner != nil {
+		return
+	}
+	var winningRune rune
+	for i := range 3 {
+		// Check vertical win
+		if g.Board[i] != 0 &&
+			g.Board[i] == g.Board[i+3] &&
+			g.Board[i] == g.Board[i+6] {
+			winningRune = g.Board[1]
+		}
+		// Check horizontal win
+		j := i * 3
+		if g.Board[j] != 0 &&
+			g.Board[j] == g.Board[j+1] &&
+			g.Board[j] == g.Board[j+2] {
+			winningRune = g.Board[j]
+		}
+	}
+	// Check diagonal wins
+	if g.Board[0] != 0 &&
+		g.Board[0] == g.Board[4] &&
+		g.Board[0] == g.Board[8] {
+		winningRune = g.Board[0]
+	}
+	if g.Board[2] != 0 &&
+		g.Board[2] == g.Board[4] &&
+		g.Board[2] == g.Board[6] {
+		winningRune = g.Board[2]
+	}
+	if winningRune != 0 {
+		if g.Turns[g.Players[0]] == winningRune {
+			g.Winner = g.Players[0]
+		} else {
+			g.Winner = g.Players[1]
 		}
 	}
 }
