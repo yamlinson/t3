@@ -28,7 +28,6 @@ type Model struct {
 	player  *player.Player
 	game    *Game
 	cursor  int
-	state   gameState
 	tickCmd tea.Cmd
 }
 
@@ -53,12 +52,20 @@ func (m Model) View() string {
 	var s string
 	cells := make([]string, 9)
 
-	switch m.state {
-	case gameInProgress:
+	switch m.game.State {
+	case InProgress:
 		// Check time until TurnTimout occurs. Clamp positive
 		remaining := max(0, 60-int(time.Since(m.game.TurnStart).Seconds()))
-		s += fmt.Sprintf("Current turn: %s \t\t Time remaining: %s\n\n", string(m.game.Next.Name), formatTimer(remaining))
-	case gameOver:
+		s += fmt.Sprintf(
+			"Current turn: %s (%s) \t\t Time remaining: %s\n\n",
+			string(m.game.Next.Name),
+			string(m.game.Turns[m.game.Next]),
+			formatTimer(remaining),
+		)
+	case Draw:
+		s += "Game over! It's a draw!\n\n"
+	case Forfeit:
+	case Win:
 		s += fmt.Sprintf("Game over! %s won!\n\n", string(m.game.Winner.Name))
 	}
 
@@ -88,7 +95,7 @@ func (m Model) View() string {
 
 	s += "\n\nControls:\n"
 	s += "q to quit game\n"
-	if m.state == gameInProgress {
+	if m.game.State == InProgress {
 		s += "hjkl or arrow keys to move\n"
 		s += "space to choose square\n"
 	}
@@ -99,17 +106,10 @@ func (m Model) View() string {
 // Update handles changes to a game screen
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	if m.game.Winner != nil {
-		m.state = gameOver
-	}
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch m.state {
-		case gameOver:
-			if msg.String() == "q" {
-				cmd = func() tea.Msg { return event.SwitchToMainModel{} }
-			}
-		case gameInProgress:
+		switch m.game.State {
+		case InProgress:
 			switch msg.String() {
 			case "q":
 				e := StreamEvent{
@@ -150,6 +150,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}()
 				}
 			}
+		default:
+			if msg.String() == "q" {
+				cmd = func() tea.Msg { return event.SwitchToMainModel{} }
+			}
 		}
 	case player.StreamEvent:
 		switch msg.Type {
@@ -157,20 +161,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmd = m.player.WaitForEvent()
 	case tickMsg:
-		if m.state == gameOver {
-			return m, nil
+		if m.game.State == InProgress {
+			return m, tickCmd()
 		}
-		return m, tickCmd()
+		return m, nil
 	}
 	return &m, cmd
 }
-
-type gameState int
-
-const (
-	gameInProgress gameState = iota
-	gameOver
-)
 
 // SwitchToGameModel instructs Bubble Tea to display a game
 type SwitchToGameModel struct {

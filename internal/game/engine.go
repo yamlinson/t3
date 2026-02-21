@@ -19,6 +19,7 @@ type Game struct {
 	turnTimer *time.Timer
 	TurnStart time.Time
 	Stream    chan StreamEvent
+	State     State
 	Winner    *player.Player
 }
 
@@ -39,6 +40,18 @@ const (
 	TurnTimeout
 )
 
+// State defines the possible states of a game
+type State int
+
+// InProgress, Draw, Forfeit, Win
+// are the possible states of a game
+const (
+	InProgress State = iota
+	Draw
+	Forfeit
+	Win
+)
+
 // NewGame creates a new game with the given pair of players
 func NewGame(p1 *player.Player, p2 *player.Player) *Game {
 	turns := make(map[*player.Player]rune)
@@ -51,13 +64,14 @@ func NewGame(p1 *player.Player, p2 *player.Player) *Game {
 		Turns:   turns,
 		Next:    first,
 		Stream:  make(chan StreamEvent),
+		State:   InProgress,
 	}
 }
 
 // WatchStream continuously watches the Game's Stream channel
 // and handles StreamEvents based on their EventType
 func (g *Game) WatchStream() {
-	if g.Winner == nil && g.turnTimer == nil {
+	if g.State == InProgress && g.turnTimer == nil {
 		g.turnTimer = g.startTurnTimer()
 	}
 	for evt := range g.Stream {
@@ -76,7 +90,7 @@ func (g *Game) WatchStream() {
 			g.stopTurnTimer()
 			g.Board[t] = g.Turns[p]
 			g.checkWin()
-			if g.Winner != nil {
+			if g.State == Win || g.State == Draw {
 				g.sendBoardUpdate(nil)
 				continue
 			}
@@ -84,11 +98,13 @@ func (g *Game) WatchStream() {
 			g.turnTimer = g.startTurnTimer()
 			g.sendBoardUpdate(nil)
 		case TurnTimeout:
+			g.State = Forfeit
 			g.Winner = g.otherPlayer(g.Next)
 			g.sendBoardUpdate(nil)
 		case PlayerQuit:
 			p := evt.Data["player"].(*player.Player)
 			g.stopTurnTimer()
+			g.State = Forfeit
 			g.Winner = g.otherPlayer(p)
 			g.sendBoardUpdate(nil)
 		}
@@ -130,12 +146,20 @@ func (g *Game) checkWin() {
 		winningRune = g.Board[2]
 	}
 	if winningRune != 0 {
+		g.State = Win
 		if g.Turns[g.Players[0]] == winningRune {
 			g.Winner = g.Players[0]
 		} else {
 			g.Winner = g.Players[1]
 		}
 	}
+	// Check draw
+	for i := range 9 {
+		if g.Board[i] == 0 { // Open tile still available
+			return
+		}
+	}
+	g.State = Draw
 }
 
 func (g *Game) sendBoardUpdate(data map[string]any) {
