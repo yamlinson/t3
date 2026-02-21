@@ -19,6 +19,7 @@ import (
 	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
 	"github.com/google/uuid"
+	"github.com/yamlinson/t3/internal/event"
 	"github.com/yamlinson/t3/internal/game"
 	"github.com/yamlinson/t3/internal/player"
 	"github.com/yamlinson/t3/internal/queue"
@@ -89,8 +90,8 @@ type mainModel struct {
 	quitStyle   lipgloss.Style
 }
 
-func initMainModel(p *player.Player, mm *queue.Matchmaker) mainModel {
-	return mainModel{
+func initMainModel(p *player.Player, mm *queue.Matchmaker) *mainModel {
+	return &mainModel{
 		activeModel: queue.GetModel(p, mm),
 		player:      p,
 		matchmaker:  mm,
@@ -102,8 +103,17 @@ func (m mainModel) Init() tea.Cmd {
 }
 
 func (m mainModel) View() string {
-	s := m.activeModel.View()
-	return m.txtStyle.Render(s) + "\n\n" + m.quitStyle.Render("Press 'ctrl+c' to quit\n")
+	content := m.activeModel.View()
+	styled := m.txtStyle.Render(content)
+	quit := m.quitStyle.Render("Press 'ctrl+c' to exit\n")
+	s := styled + "\n\n" + quit
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		s,
+	)
 }
 
 func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -114,9 +124,16 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
-			return m, tea.Quit
+			return &m, tea.Quit
 		}
+	case game.SwitchToGameModel:
+		g := msg.Game
+		m.activeModel = game.GetModel(g, m.player)
+		return &m, m.activeModel.Init()
+	case event.SwitchToMainModel:
+		m.activeModel = queue.GetModel(m.player, m.matchmaker)
+		return &m, m.activeModel.Init()
 	}
 	m.activeModel, cmd = m.activeModel.Update(msg)
-	return m, cmd
+	return &m, cmd
 }

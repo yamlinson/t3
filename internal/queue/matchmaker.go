@@ -12,7 +12,7 @@ import (
 
 // Matchmaker pairs players into matches
 type Matchmaker struct {
-	players []player.Player
+	players []*player.Player
 	mu      sync.Mutex
 	results chan matchResult
 }
@@ -20,13 +20,13 @@ type Matchmaker struct {
 // NewMatchmaker instantiates a new Matchmaker
 func NewMatchmaker() *Matchmaker {
 	return &Matchmaker{
-		players: make([]player.Player, 0),
+		players: make([]*player.Player, 0),
 		results: make(chan matchResult),
 	}
 }
 
 // AddPlayer adds the given player to a Matchmaker
-func (mm *Matchmaker) AddPlayer(p player.Player) {
+func (mm *Matchmaker) AddPlayer(p *player.Player) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 
@@ -43,7 +43,7 @@ func (mm *Matchmaker) AddPlayer(p player.Player) {
 	evt := player.StreamEvent{
 		Type: player.Matched,
 		Data: map[string]any{
-			"Match": match,
+			"match": match,
 		},
 	}
 
@@ -54,7 +54,7 @@ func (mm *Matchmaker) AddPlayer(p player.Player) {
 		ok := match.waitForResponses()
 		mm.results <- matchResult{
 			matchID: match.ID,
-			players: [2]player.Player{p1, p2},
+			players: [2]*player.Player{p1, p2},
 			ok:      ok,
 		}
 	}()
@@ -73,14 +73,21 @@ func (mm *Matchmaker) WatchResults() {
 			}
 		}
 		g := game.NewGame(p1, p2)
+		go g.WatchStream()
 		evt = player.StreamEvent{
 			Type: player.GameReady,
 			Data: map[string]any{
 				"game": g,
 			},
 		}
-		p1.Stream <- evt
-		p2.Stream <- evt
+		for _, p := range [2]*player.Player{p1, p2} {
+			go func(plr *player.Player) {
+				select {
+				case plr.Stream <- evt:
+				case <-time.After(60 * time.Second):
+				}
+			}(p)
+		}
 	}
 }
 
@@ -99,7 +106,7 @@ type Match struct {
 
 type matchResult struct {
 	matchID uuid.UUID
-	players [2]player.Player
+	players [2]*player.Player
 	ok      bool
 }
 
