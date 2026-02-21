@@ -2,6 +2,9 @@
 package game
 
 import (
+	"fmt"
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/yamlinson/t3/internal/event"
@@ -22,10 +25,11 @@ var (
 
 // Model describes a game screen
 type Model struct {
-	player *player.Player
-	game   *Game
-	cursor int
-	state  gameState
+	player  *player.Player
+	game    *Game
+	cursor  int
+	state   gameState
+	tickCmd tea.Cmd
 }
 
 // GetModel returns a model for a game screen
@@ -38,7 +42,10 @@ func GetModel(g *Game, p *player.Player) *Model {
 
 // Init sets the initial state of a game screen
 func (m Model) Init() tea.Cmd {
-	return m.player.WaitForEvent()
+	return tea.Batch(
+		m.player.WaitForEvent(),
+		tickCmd(),
+	)
 }
 
 // View returns the visual state of a queue screen
@@ -48,9 +55,11 @@ func (m Model) View() string {
 
 	switch m.state {
 	case gameInProgress:
-		s += "Current turn: " + string(m.game.Next.Name) + "\n\n"
+		// Check time until TurnTimout occurs. Clamp positive
+		remaining := max(0, 60-int(time.Since(m.game.TurnStart).Seconds()))
+		s += fmt.Sprintf("Current turn: %s \t\t Time remaining: %s\n\n", string(m.game.Next.Name), formatTimer(remaining))
 	case gameOver:
-		s += "Game over! " + string(m.game.Winner.Name) + " won!\n\n"
+		s += fmt.Sprintf("Game over! %s won!\n\n", string(m.game.Winner.Name))
 	}
 
 	for i := range 9 {
@@ -147,6 +156,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case player.BoardUpdate:
 		}
 		cmd = m.player.WaitForEvent()
+	case tickMsg:
+		if m.state == gameOver {
+			return m, nil
+		}
+		return m, tickCmd()
 	}
 	return &m, cmd
 }
@@ -161,4 +175,28 @@ const (
 // SwitchToGameModel instructs Bubble Tea to display a game
 type SwitchToGameModel struct {
 	Game *Game
+}
+
+var (
+	timerNormal   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	timerWarning  = lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
+	timerCritical = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+)
+
+func formatTimer(remaining int) string {
+	style := timerNormal
+	if remaining <= 10 {
+		style = timerCritical
+	} else if remaining <= 30 {
+		style = timerWarning
+	}
+	return style.Render(fmt.Sprintf("(%ds)", remaining))
+}
+
+type tickMsg struct{}
+
+func tickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+		return tickMsg{}
+	})
 }

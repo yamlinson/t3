@@ -3,7 +3,6 @@ package game
 
 import (
 	"math/rand/v2"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,14 +11,15 @@ import (
 
 // Game represents the state of one game
 type Game struct {
-	mu      sync.Mutex
-	ID      uuid.UUID
-	Players [2]*player.Player
-	Board   [9]rune
-	Turns   map[*player.Player]rune
-	Next    *player.Player
-	Stream  chan StreamEvent
-	Winner  *player.Player
+	ID        uuid.UUID
+	Players   [2]*player.Player
+	Board     [9]rune
+	Turns     map[*player.Player]rune
+	Next      *player.Player
+	turnTimer *time.Timer
+	TurnStart time.Time
+	Stream    chan StreamEvent
+	Winner    *player.Player
 }
 
 // StreamEvent contains the information sent to a game over its lifecycle
@@ -31,11 +31,12 @@ type StreamEvent struct {
 // EventType defines the Types which can be associated with a StreamEvent
 type EventType int
 
-// PlayerTurn, PlayerQuit
+// PlayerTurn, PlayerQuit, TurnTimeout
 // describe possible events a game might be notified of
 const (
 	PlayerTurn EventType = iota
 	PlayerQuit
+	TurnTimeout
 )
 
 // NewGame creates a new game with the given pair of players
@@ -56,6 +57,9 @@ func NewGame(p1 *player.Player, p2 *player.Player) *Game {
 // WatchStream continuously watches the Game's Stream channel
 // and handles StreamEvents based on their EventType
 func (g *Game) WatchStream() {
+	if g.Winner == nil && g.turnTimer == nil {
+		g.turnTimer = g.startTurnTimer()
+	}
 	for evt := range g.Stream {
 		switch evt.Type {
 		case PlayerTurn:
@@ -69,27 +73,28 @@ func (g *Game) WatchStream() {
 				g.sendBoardUpdate(nil)
 				continue
 			}
+			g.stopTurnTimer()
 			g.Board[t] = g.Turns[p]
 			g.checkWin()
 			if g.Winner != nil {
 				g.sendBoardUpdate(nil)
 				continue
 			}
-			if p == g.Players[0] {
-				g.Next = g.Players[1]
-			} else {
-				g.Next = g.Players[0]
-			}
+			g.Next = g.otherPlayer(p)
+			g.turnTimer = g.startTurnTimer()
+			g.sendBoardUpdate(nil)
+		case TurnTimeout:
+			g.Winner = g.otherPlayer(g.Next)
 			g.sendBoardUpdate(nil)
 		case PlayerQuit:
 			p := evt.Data["player"].(*player.Player)
-			if p == g.Players[0] {
-				g.Winner = g.Players[1]
-			} else {
-				g.Winner = g.Players[0]
-			}
+			g.stopTurnTimer()
+			g.Winner = g.otherPlayer(p)
 			g.sendBoardUpdate(nil)
 		}
+	}
+	if g.turnTimer != nil {
+		g.turnTimer.Stop()
 	}
 }
 
@@ -145,5 +150,28 @@ func (g *Game) sendBoardUpdate(data map[string]any) {
 			case <-time.After(60 * time.Second):
 			}
 		}(p)
+	}
+}
+
+func (g *Game) otherPlayer(p *player.Player) *player.Player {
+	if p == g.Players[0] {
+		return g.Players[1]
+	}
+	return g.Players[0]
+}
+
+func (g *Game) startTurnTimer() *time.Timer {
+	g.TurnStart = time.Now()
+	return time.AfterFunc(60*time.Second, func() {
+		g.Stream <- StreamEvent{
+			Type: TurnTimeout,
+			Data: map[string]interface{}{},
+		}
+	})
+}
+
+func (g *Game) stopTurnTimer() {
+	if g.turnTimer != nil {
+		g.turnTimer.Stop()
 	}
 }
