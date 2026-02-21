@@ -103,8 +103,10 @@ func (m mainModel) Init() tea.Cmd {
 }
 
 func (m mainModel) View() string {
-	s := m.activeModel.View()
-	s = m.txtStyle.Render(s) + "\n\n" + m.quitStyle.Render("Press 'ctrl+c' to exit\n")
+	content := m.activeModel.View()
+	styled := m.txtStyle.Render(content)
+	quit := m.quitStyle.Render("Press 'ctrl+c' to exit\n")
+	s := styled + "\n\n" + quit
 	return lipgloss.Place(
 		m.width,
 		m.height,
@@ -129,7 +131,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeModel = game.GetModel(g, m.player)
 		return &m, m.activeModel.Init()
 	case event.SwitchToMainModel:
-		m.activeModel = initMainModel(m.player, m.matchmaker)
+		m.activeModel = queue.GetModel(m.player, m.matchmaker)
 		return &m, m.activeModel.Init()
 	}
 	m.activeModel, cmd = m.activeModel.Update(msg)
