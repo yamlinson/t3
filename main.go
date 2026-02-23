@@ -124,6 +124,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
+			m.activeModel, _ = m.activeModel.Update(event.ShutdownMsg{})
 			return &m, tea.Quit
 		}
 	case game.SwitchToGameModel:

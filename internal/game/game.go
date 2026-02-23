@@ -65,6 +65,7 @@ func (m Model) View() string {
 	case Draw:
 		s += "Game over! It's a draw!\n\n"
 	case Forfeit:
+		fallthrough
 	case Win:
 		s += fmt.Sprintf("Game over! %s won!\n\n", string(m.game.Winner.Name))
 	}
@@ -165,7 +166,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tickCmd()
 		}
 		return m, nil
+	case event.ShutdownMsg:
+		e := StreamEvent{
+			Type: PlayerQuit,
+			Data: map[string]any{"player": m.player},
+		}
+		go func() {
+			m.game.Stream <- e
+		}()
+		return m, nil
 	}
+
 	return &m, cmd
 }
 
