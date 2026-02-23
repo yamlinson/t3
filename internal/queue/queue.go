@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/timer"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/yamlinson/t3/internal/event"
 	"github.com/yamlinson/t3/internal/game"
 	"github.com/yamlinson/t3/internal/player"
 )
@@ -52,6 +53,7 @@ func (m Model) View() string {
 		s = fmt.Sprintf("Please enter your name...\n\n%s\n\n%s", m.textInput.View(), m.errMsg)
 	case queued:
 		s = fmt.Sprintf("Hello, %s!\n\nFinding an opponent...\n", m.player.Name)
+		s += "Press 'q' to leave queue\n\n"
 	case matched:
 		seconds := int(m.timer.Timeout.Seconds())
 		s = "Match found! Would you like to accept? (Y/n)\n\n"
@@ -90,6 +92,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return playerAdded{}
 					},
 				)
+			}
+		case queued:
+			switch msg.String() {
+			case "q":
+				m.matchmaker.DelPlayer(m.player)
+				m.state = nameInput
+				return &m, nil
 			}
 		case matched:
 			switch msg.String() {
@@ -132,6 +141,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = func() tea.Msg { return game.SwitchToGameModel{Game: m.game} }
 			m.timer.Stop()
 		}
+	case event.ShutdownMsg:
+		m.matchmaker.DelPlayer(m.player)
+		return &m, nil
 	}
 
 	if m.state == nameInput {

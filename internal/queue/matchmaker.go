@@ -2,6 +2,7 @@
 package queue
 
 import (
+	"slices"
 	"sync"
 	"time"
 
@@ -58,6 +59,20 @@ func (mm *Matchmaker) AddPlayer(p *player.Player) {
 			ok:      ok,
 		}
 	}()
+}
+
+// DelPlayer removes a player from the Matchmaker queue
+func (mm *Matchmaker) DelPlayer(p *player.Player) {
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+
+	mm.players = func(p *player.Player) []*player.Player {
+		index := slices.Index(mm.players, p)
+		if index == -1 {
+			return mm.players
+		}
+		return append(mm.players[:index], mm.players[index+1:]...)
+	}(p)
 }
 
 // WatchResults continuously watches a Matchmaker's Results channel
