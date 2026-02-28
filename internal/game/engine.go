@@ -124,7 +124,7 @@ func (g *Game) checkWin() {
 		if g.Board[i] != 0 &&
 			g.Board[i] == g.Board[i+3] &&
 			g.Board[i] == g.Board[i+6] {
-			winningRune = g.Board[1]
+			winningRune = g.Board[i]
 		}
 		// Check horizontal win
 		j := i * 3
