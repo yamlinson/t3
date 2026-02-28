@@ -7,22 +7,25 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/yamlinson/t3/internal/db"
 	"github.com/yamlinson/t3/internal/game"
 	"github.com/yamlinson/t3/internal/player"
 )
 
 // Matchmaker pairs players into matches
 type Matchmaker struct {
-	players []*player.Player
-	mu      sync.Mutex
-	results chan matchResult
+	players  []*player.Player
+	mu       sync.Mutex
+	results  chan matchResult
+	database *db.DB
 }
 
 // NewMatchmaker instantiates a new Matchmaker
-func NewMatchmaker() *Matchmaker {
+func NewMatchmaker(d *db.DB) *Matchmaker {
 	return &Matchmaker{
-		players: make([]*player.Player, 0),
-		results: make(chan matchResult),
+		players:  make([]*player.Player, 0),
+		results:  make(chan matchResult),
+		database: d,
 	}
 }
 
@@ -87,7 +90,7 @@ func (mm *Matchmaker) WatchResults() {
 				Data: nil,
 			}
 		}
-		g := game.NewGame(p1, p2)
+		g := game.NewGame(p1, p2, mm.database)
 		go g.WatchStream()
 		evt = player.StreamEvent{
 			Type: player.GameReady,
