@@ -19,6 +19,7 @@ import (
 	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
 	"github.com/google/uuid"
+	"github.com/yamlinson/t3/internal/db"
 	"github.com/yamlinson/t3/internal/event"
 	"github.com/yamlinson/t3/internal/game"
 	"github.com/yamlinson/t3/internal/player"
@@ -31,7 +32,17 @@ const (
 )
 
 func main() {
-	mm := queue.NewMatchmaker()
+	database, err := db.Open()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer database.Close()
+
+	if err := database.CreateSchema(); err != nil {
+		log.Fatal(err)
+	}
+
+	mm := queue.NewMatchmaker(database)
 	go mm.WatchResults()
 
 	teaHandler := func(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
@@ -42,7 +53,7 @@ func main() {
 			Stream:  make(chan player.StreamEvent),
 		}
 
-		initialModel := initMainModel(p, mm)
+		initialModel := initMainModel(p, mm, database)
 
 		return initialModel, []tea.ProgramOption{tea.WithAltScreen()}
 	}
@@ -88,13 +99,15 @@ type mainModel struct {
 	height      int
 	txtStyle    lipgloss.Style
 	quitStyle   lipgloss.Style
+	database    *db.DB
 }
 
-func initMainModel(p *player.Player, mm *queue.Matchmaker) *mainModel {
+func initMainModel(p *player.Player, mm *queue.Matchmaker, d *db.DB) *mainModel {
 	return &mainModel{
 		activeModel: queue.GetModel(p, mm),
 		player:      p,
 		matchmaker:  mm,
+		database:    d,
 	}
 }
 

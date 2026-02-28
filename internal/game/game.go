@@ -64,9 +64,7 @@ func (m Model) View() string {
 		)
 	case Draw:
 		s += "Game over! It's a draw!\n\n"
-	case Forfeit:
-		fallthrough
-	case Win:
+	case Forfeit, Win:
 		s += fmt.Sprintf("Game over! %s won!\n\n", string(m.game.Winner.Name))
 	}
 
