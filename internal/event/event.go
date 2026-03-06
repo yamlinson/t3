@@ -1,8 +1,10 @@
 // Package event stores common events used by other packages
 package event
 
-// SwitchToMainModel instructs Bubble Tea to display the main model
-type SwitchToMainModel struct{}
+// SwitchToModel instructs Bubble Tea to display a given model
+type SwitchToModel struct {
+	Data map[string]any
+}
 
-// ShutdownMsg instructs a model to shutdown prior to shutdown
+// ShutdownMsg instructs a model to clean up prior to shutdown
 type ShutdownMsg struct{}
