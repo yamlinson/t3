@@ -118,7 +118,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				go func() {
 					m.game.Stream <- e
 				}()
-				cmd = func() tea.Msg { return event.SwitchToMainModel{} }
+				cmd = func() tea.Msg { return event.SwitchToModel{Data: map[string]any{"model": "home"}} }
 			case "h", "left":
 				if m.cursor%3 > 0 {
 					m.cursor--
@@ -151,7 +151,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		default:
 			if msg.String() == "q" {
-				cmd = func() tea.Msg { return event.SwitchToMainModel{} }
+				cmd = func() tea.Msg { return event.SwitchToModel{Data: map[string]any{"model": "home"}} }
 			}
 		}
 	case player.StreamEvent:
@@ -176,11 +176,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return &m, cmd
-}
-
-// SwitchToGameModel instructs Bubble Tea to display a game
-type SwitchToGameModel struct {
-	Game *Game
 }
 
 var (

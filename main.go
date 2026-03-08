@@ -22,6 +22,7 @@ import (
 	"github.com/yamlinson/t3/internal/db"
 	"github.com/yamlinson/t3/internal/event"
 	"github.com/yamlinson/t3/internal/game"
+	"github.com/yamlinson/t3/internal/home"
 	"github.com/yamlinson/t3/internal/player"
 	"github.com/yamlinson/t3/internal/queue"
 )
@@ -104,7 +105,7 @@ type mainModel struct {
 
 func initMainModel(p *player.Player, mm *queue.Matchmaker, d *db.DB) *mainModel {
 	return &mainModel{
-		activeModel: queue.GetModel(p, mm),
+		activeModel: home.GetModel(d),
 		player:      p,
 		matchmaker:  mm,
 		database:    d,
@@ -140,13 +141,18 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeModel, _ = m.activeModel.Update(event.ShutdownMsg{})
 			return &m, tea.Quit
 		}
-	case game.SwitchToGameModel:
-		g := msg.Game
-		m.activeModel = game.GetModel(g, m.player)
-		return &m, m.activeModel.Init()
-	case event.SwitchToMainModel:
-		m.activeModel = queue.GetModel(m.player, m.matchmaker)
-		return &m, m.activeModel.Init()
+	case event.SwitchToModel:
+		switch msg.Data["model"] {
+		case "home":
+			m.activeModel = home.GetModel(m.database)
+		case "queue":
+			m.activeModel = queue.GetModel(m.player, m.matchmaker)
+			return &m, m.activeModel.Init()
+		case "game":
+			g := msg.Data["game"].(*game.Game)
+			m.activeModel = game.GetModel(g, m.player)
+			return &m, m.activeModel.Init()
+		}
 	}
 	m.activeModel, cmd = m.activeModel.Update(msg)
 	return &m, cmd

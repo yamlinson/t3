@@ -28,7 +28,11 @@ type Model struct {
 // GetModel returns a Model for a queue screen
 func GetModel(p *player.Player, mm *Matchmaker) *Model {
 	ti := textinput.New()
-	ti.Placeholder = "Your name"
+	if p.Name != "" {
+		ti.SetValue(p.Name)
+	} else {
+		ti.Placeholder = "Your name"
+	}
 	ti.CharLimit = 20
 	ti.Width = 30
 	ti.Focus()
@@ -138,7 +142,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case player.GameReady:
 			m.state = gameReady
 			m.game = msg.Data["game"].(*game.Game)
-			cmd = func() tea.Msg { return game.SwitchToGameModel{Game: m.game} }
+			cmd = func() tea.Msg {
+				return event.SwitchToModel{Data: map[string]any{
+					"model": "game",
+					"game":  m.game,
+				}}
+			}
 			m.timer.Stop()
 		}
 	case event.ShutdownMsg:

@@ -76,6 +76,34 @@ func (db *DB) CreateSchema() error {
 	return err
 }
 
+// GetTopPlayers returns the top 3 players by win count
+func (db *DB) GetTopPlayers() ([]Player, error) {
+	rows, err := db.Query(`
+		SELECT name, wins, draws, losses
+		FROM players
+		ORDER BY wins DESC, draws DESC, losses ASC
+		LIMIT 3;
+		`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var players []Player
+
+	for rows.Next() {
+		var p Player
+		if err := rows.Scan(&p.Name, &p.Wins, &p.Draws, &p.Losses); err != nil {
+			return players, err
+		}
+		players = append(players, p)
+	}
+	if err = rows.Err(); err != nil {
+		return players, err
+	}
+	return players, nil
+}
+
 // Close wraps the underlying db.Close
 func (db *DB) Close() error {
 	return db.DB.Close()
