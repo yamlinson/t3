@@ -28,7 +28,11 @@ type Model struct {
 // GetModel returns a Model for a queue screen
 func GetModel(p *player.Player, mm *Matchmaker) *Model {
 	ti := textinput.New()
-	ti.Placeholder = "Your name"
+	if p.Name != "" {
+		ti.SetValue(p.Name)
+	} else {
+		ti.Placeholder = "Your name"
+	}
 	ti.CharLimit = 20
 	ti.Width = 30
 	ti.Focus()
