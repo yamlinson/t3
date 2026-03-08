@@ -3,6 +3,7 @@ package home
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -11,8 +12,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/yamlinson/t3/internal/db"
 	"github.com/yamlinson/t3/internal/event"
-	"github.com/yamlinson/t3/internal/player"
-	"github.com/yamlinson/t3/internal/queue"
 )
 
 type keyMap struct {
@@ -43,8 +42,6 @@ var keys = keyMap{
 
 // Model describes a home screen
 type Model struct {
-	player     *player.Player
-	matchmaker *queue.Matchmaker
 	database   *db.DB
 	table      table.Model
 	help       help.Model
@@ -53,11 +50,25 @@ type Model struct {
 }
 
 // GetModel returns a model for a home screen
-func GetModel(p *player.Player, mm *queue.Matchmaker, d *db.DB) *Model {
-	leaders := []table.Row{
-		{"1", "Alice", "420", "69", "0"},
-		{"2", "Bob", "123", "42", "69"},
-		{"3", "Charlie", "67", "13", "123"},
+func GetModel(d *db.DB) *Model {
+	tp, err := d.GetTopPlayers()
+	if err != nil {
+		fmt.Printf("Error getting players from database: %v", err)
+	}
+
+	var leaders []table.Row
+
+	if tp != nil {
+		for i, pl := range tp {
+			row := table.Row{
+				strconv.Itoa(i + 1),
+				pl.Name,
+				strconv.Itoa(pl.Wins),
+				strconv.Itoa(pl.Draws),
+				strconv.Itoa(pl.Losses),
+			}
+			leaders = append(leaders, row)
+		}
 	}
 
 	columns := []table.Column{
@@ -104,8 +115,6 @@ func GetModel(p *player.Player, mm *queue.Matchmaker, d *db.DB) *Model {
 	help.Styles.ShortKey = lipgloss.NewStyle().Foreground(lipgloss.Color("33"))
 
 	return &Model{
-		player:     p,
-		matchmaker: mm,
 		database:   d,
 		table:      t,
 		help:       help,

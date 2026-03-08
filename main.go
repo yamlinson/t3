@@ -105,7 +105,7 @@ type mainModel struct {
 
 func initMainModel(p *player.Player, mm *queue.Matchmaker, d *db.DB) *mainModel {
 	return &mainModel{
-		activeModel: home.GetModel(p, mm, d),
+		activeModel: home.GetModel(d),
 		player:      p,
 		matchmaker:  mm,
 		database:    d,
@@ -144,7 +144,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case event.SwitchToModel:
 		switch msg.Data["model"] {
 		case "home":
-			m.activeModel = home.GetModel(m.player, m.matchmaker, m.database)
+			m.activeModel = home.GetModel(m.database)
 		case "queue":
 			m.activeModel = queue.GetModel(m.player, m.matchmaker)
 			return &m, m.activeModel.Init()
