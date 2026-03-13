@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	host = "localhost"
+	host = "0.0.0.0"
 	port = "2222"
 )
 
@@ -56,7 +56,9 @@ func main() {
 
 		initialModel := initMainModel(p, mm, database)
 
-		return initialModel, []tea.ProgramOption{tea.WithAltScreen()}
+		return initialModel, []tea.ProgramOption{
+			tea.WithAltScreen(),
+		}
 	}
 
 	s, err := wish.NewServer(
