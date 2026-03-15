@@ -10,7 +10,9 @@ Note: This application contains no authentication or authorization mechanisms.
 It is not currently intended for use on public networks.
 
 To run the latest image with a SQLite data store and exposing SSH on port 2222:
+
 `docker pull ghcr.io/yamlinson/t3:latest`
+
 `docker run -it -p 2222:2222 t3:latest`
 
 ## About
@@ -29,22 +31,29 @@ or a SQLite database is used by default.
 ### Build binary from source
 
 `git clone https://github.com/yamlinson/t3.git`
+
 `cd t3`
+
 `go build -o t3`
+
 `./t3`
 
 ### Build container image from source
 
 `git clone https://github.com/yamlinson/t3.git`
+
 `cd t3`
+
 `docker build -t t3:latest`
 
 ### Run with Docker
 
 Pull the latest image if you don't already have it:
+
 `docker pull ghcr.io/yamlinson/t3:latest`
 
 Note: `-it` ensures full color support
+
 `docker run -it -p 2222:2222 t3:latest`
 
 #### Optionally, mount /data to a local dir to persist the SQLite database
@@ -64,4 +73,5 @@ set `SQLITE_PATH` in your environment.
 This could also be used to persist database state to a preferred location when mounting storage to a container.
 
 To use a PostgreSQL database, set `DATABASE_URL` in the server environment with the standard format:
+
 `postgresql://user:password@host:port/database`
